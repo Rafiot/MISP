@@ -72,6 +72,10 @@ class ShadowAttributesController extends AppController {
 		);
 		if (empty($shadow)) return array('false' => true, 'errors' => 'Proposal not found.');
 		$shadow = $shadow['ShadowAttribute'];
+		if ($this->ShadowAttribute->typeIsAttachment($shadow['type'])) {
+			$encodedFile = $this->ShadowAttribute->base64EncodeAttachment($shadow);
+			$shadow['data'] = $encodedFile;
+		}
 		// If the old_id is set to anything but 0 then we're dealing with a proposed edit to an existing attribute
 		if ($shadow['old_id'] != 0) {
 			// Find the live attribute by the shadow attribute's uuid, so we can begin editing it
@@ -141,9 +145,6 @@ class ShadowAttributesController extends AppController {
 			$attribute['distribution'] = $event['Event']['distribution'];
 			$this->Attribute->create();
 			$this->Attribute->save($attribute);
-			if ($this->ShadowAttribute->typeIsAttachment($shadow['type'])) {
-				$this->_moveFile($toDeleteId, $this->Attribute->id, $shadow['event_id']);
-			}
 			$this->ShadowAttribute->setDeleted($toDeleteId);
 		
 			$fieldList = array('proposal_email_lock', 'id', 'info', 'published');
@@ -554,6 +555,9 @@ class ShadowAttributesController extends AppController {
 		if ($this->request->is('post')) {
 			// Check if there were problems with the file upload
 			// only keep the last part of the filename, this should prevent directory attacks
+			$hashes = array('md5' => 'malware-sample', 'sha1' => 'filename|sha1', 'sha256' => 'filename|sha256');
+			$filename = basename($this->request->data['ShadowAttribute']['value']['name']);
+			$tmpfile = new File($this->request->data['ShadowAttribute']['value']['tmp_name']);
 			if ((isset($this->request->data['ShadowAttribute']['value']['error']) && $this->request->data['ShadowAttribute']['value']['error'] == 0) ||
 			(!empty( $this->request->data['ShadowAttribute']['value']['tmp_name']) && $this->request->data['ShadowAttribute']['value']['tmp_name'] != 'none')
 			) {
@@ -566,12 +570,8 @@ class ShadowAttributesController extends AppController {
 			
 			$fails = array();
 			$completeFail = false;
-			
-			$filename = basename($this->request->data['ShadowAttribute']['value']['name']);
-			$tmpfile = new File($this->request->data['ShadowAttribute']['value']['tmp_name']);
-			$hashes = array('md5' => 'malware-sample', 'sha1' => 'filename|sha1', 'sha256' => 'filename|sha256');
 			if ($this->request->data['ShadowAttribute']['malware']) {
-				$result = $this->Event->Attribute->handleMaliciousBase64($this->request->data['ShadowAttribute']['event_id'], $filename, base64_encode($tmpfile->read()), array_keys($hashes));
+				$result = $this->ShadowAttribute->Event->Attribute->handleMaliciousBase64($this->request->data['ShadowAttribute']['event_id'], $filename, base64_encode($tmpfile->read()), array_keys($hashes));
 				if (!$result['success']) {
 					$this->Session->setFlash(__('There was a problem to upload the file.', true), 'default', array(), 'error');
 					$this->redirect(array('controller' => 'events', 'action' => 'view', $this->request->data['ShadowAttribute']['event_id']));
@@ -584,6 +584,7 @@ class ShadowAttributesController extends AppController {
 									'category' => $this->request->data['ShadowAttribute']['category'],
 									'type' => $typeName,
 									'event_id' => $this->request->data['ShadowAttribute']['event_id'],
+									'comment' => $this->request->data['ShadowAttribute']['comment'],
 									'to_ids' => 1,
 									'email' => $this->Auth->user('email'),
 									'org' => $this->Auth->user('org'),
@@ -604,6 +605,7 @@ class ShadowAttributesController extends AppController {
 								'category' => $this->request->data['ShadowAttribute']['category'],
 								'type' => 'attachment',
 								'event_id' => $this->request->data['ShadowAttribute']['event_id'],
+								'comment' => $this->request->data['ShadowAttribute']['comment'],
 								'data' => base64_encode($tmpfile->read()),
 								'to_ids' => 0,
 								'email' => $this->Auth->user('email'),
@@ -1165,9 +1167,9 @@ class ShadowAttributesController extends AppController {
 		$fails = array_diff($ids, $successes);
 		$this->autoRender = false;
 		if (count($fails) == 0 && count($successes) > 0) {
-			return new CakeResponse(array('body'=> json_encode(array('saved' => true, 'success' => count($successes) . ' proposal' . (count($successes) != 1 ? 's' : '') . ' deleted.')),'status'=>200));
+			return new CakeResponse(array('body'=> json_encode(array('saved' => true, 'success' => count($successes) . ' proposal' . (count($successes) != 1 ? 's' : '') . ' accepted.')),'status'=>200));
 		} else {
-			return new CakeResponse(array('body'=> json_encode(array('saved' => false, 'errors' => count($successes) . ' proposal' . (count($successes) != 1 ? 's' : '') . ' deleted, but ' . count($fails) . ' proposal' . (count($fails) != 1 ? 's' : '') . ' could not be deleted.')),'status'=>200));
+			return new CakeResponse(array('body'=> json_encode(array('saved' => false, 'errors' => count($successes) . ' proposal' . (count($successes) != 1 ? 's' : '') . ' accepted, but ' . count($fails) . ' proposal' . (count($fails) != 1 ? 's' : '') . ' could not be deleted.')),'status'=>200));
 		}
 	}
 }
