@@ -34,6 +34,7 @@ install:
     - sudo pip3.6 install --upgrade pip setuptools requests
     - hash -r
     - sudo pip3.6 install --upgrade -r requirements.txt
+    - hash -r
     - phpenv rehash
     - pushd app
     - composer install
@@ -88,6 +89,7 @@ install:
     - sudo usermod -a -G www-data $USER
     - sudo -E su $USER -c 'app/Console/cake userInit -q | sudo tee ./key.txt'
     - sudo app/Console/cake Live 1
+    - sudo app/Console/cake Admin setSetting "Plugin.ZeroMQ_enable" true
     - sudo chmod 777 ./key.txt
     - sudo chmod -R 777 ./tests
     - sudo chown -R www-data:www-data `pwd`
